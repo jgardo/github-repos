@@ -13,6 +13,7 @@ import pl.jgardo.github.repos.controller.dto.RepositoryDTO;
 import pl.jgardo.github.repos.controller.mapper.RepositoryMapper;
 import pl.jgardo.github.repos.service.GithubService;
 import pl.jgardo.github.repos.timezone.TimeZoneService;
+import rx.Single;
 
 @RestController
 @RequestMapping("/repositories")
@@ -32,14 +33,14 @@ public class OwnerRepoController {
 		this.timezoneService = timezoneService;
 	}
 
-	@GetMapping(path="/{owner}/{repositoryName}")
-	public RepositoryDTO getRepoDetails(@PathVariable String owner,
-                                        @PathVariable String repositoryName,
-                                        @RequestHeader(name=TIME_ZONE_HEADER_NAME,required = false) String timeZone){
-				
-		ZoneId zoneId = timezoneService.getZoneIdByTimeZoneId(timeZone);
-		Repository repository = githubService.getRepo(owner, repositoryName);
+	@GetMapping(path="/{owner}/{repositoryName}", produces = "application/json")
+	public Single<RepositoryDTO> getRepoDetails(@PathVariable String owner,
+												@PathVariable String repositoryName,
+												@RequestHeader(name=TIME_ZONE_HEADER_NAME,required = false) String timeZone){
 
-		return repositoryMapper.convertToDtoUsingZoneId(repository, zoneId);
+		Single<Repository> repository = githubService.getRepo(owner, repositoryName);
+		Single<ZoneId> zoneId = Single.just(timezoneService.getZoneIdByTimeZoneId(timeZone));
+
+		return repository.zipWith(zoneId, repositoryMapper::convertToDtoUsingZoneId);
 	}
 }

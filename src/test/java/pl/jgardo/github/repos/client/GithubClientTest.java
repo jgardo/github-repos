@@ -96,8 +96,8 @@ public class GithubClientTest {
 	
 	@Test
 	public void testExistingRepo() {
-		Repository repo = githubClient.retrieveRepository(EXISTING_OWNER, EXISTING_REPO);
-		
+		Repository repo = githubClient.retrieveRepository(EXISTING_OWNER, EXISTING_REPO).toBlocking().value();
+
 		assertNotNull(repo);
 		assertEquals("velo/feign-mock", repo.getFullName());
 		assertEquals("An easy way to test https://github.com/Netflix/feign. Since using feign most of the logic is store into annotations this helps to check if the annotations are right.", repo.getDescription());

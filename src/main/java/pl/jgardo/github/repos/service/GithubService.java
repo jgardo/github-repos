@@ -1,14 +1,17 @@
 package pl.jgardo.github.repos.service;
 
+import com.netflix.hystrix.exception.HystrixRuntimeException;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.util.Assert;
 
 import pl.jgardo.github.repos.client.GithubClient;
 import pl.jgardo.github.repos.client.exception.NotFoundException;
 import pl.jgardo.github.repos.client.exception.RepoNotFoundException;
 import pl.jgardo.github.repos.client.model.Repository;
+import rx.Single;
+
+import java.util.Optional;
 
 
 @Service
@@ -21,32 +24,34 @@ public class GithubService {
 		this.githubClient = githubClient;
 	}
 
-	public Repository getRepo(String owner, String repo) {
-		try {
-			return doGetRepo(owner, repo);
-		} catch (Exception e) {
-			return handleGetRepoException(owner, repo, e);
+	public Single<Repository> getRepo(String owner, String repo) {
+		return doGetRepo(owner, repo)
+				.onErrorResumeNext(exception -> handleGetRepoException(owner, repo, exception));
+	}
+
+	private Single<Repository> doGetRepo(String owner, String repo) {
+		return validateGetRepoParams(owner, repo)
+				.<Single<Repository>>map(Single::error)
+				.orElseGet(() -> githubClient.retrieveRepository(owner, repo).toObservable().toSingle());
+	}
+
+	private Optional<IllegalArgumentException> validateGetRepoParams(String owner, String repo) {
+		if (StringUtils.isBlank(owner)) {
+			return Optional.of(new IllegalArgumentException("Owner must not be blank"));
+		} else if (StringUtils.isBlank(repo)) {
+			return Optional.of(new IllegalArgumentException("Repo must not be blank"));
+		} else {
+			return Optional.empty();
 		}
 	}
 
-	private Repository doGetRepo(String owner, String repo) {
-		validateGetRepoParams(owner, repo);
-
-		return githubClient.retrieveRepository(owner, repo);
-	}
-
-	private void validateGetRepoParams(String owner, String repo) {
-		Assert.isTrue(StringUtils.isNotBlank(owner), "Owner must not be blank");
-		Assert.isTrue(StringUtils.isNotBlank(repo), "Repo must not be blank");
-	}
-
-	private Repository handleGetRepoException(String owner, String repo, Throwable cause) {
-		if (cause instanceof NotFoundException) {
-			throw new RepoNotFoundException(owner, repo);
+	private Single<Repository> handleGetRepoException(String owner, String repo, Throwable cause) {
+		if (cause instanceof HystrixRuntimeException && cause.getCause() instanceof NotFoundException) {
+			return Single.error(new RepoNotFoundException(owner, repo));
 		} else if (cause instanceof IllegalArgumentException) {
-			throw (IllegalArgumentException) cause;
+			return Single.error(cause);
 		} else {
-			throw new RuntimeException(String.format("Unknown exception occurs for owner: %s repo: %s", owner, repo), cause);
+			return Single.error(new RuntimeException(String.format("Unknown exception occurs for owner: %s repo: %s", owner, repo), cause));
 		}
 	}
 }
