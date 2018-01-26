@@ -6,9 +6,8 @@
 
 GithubRepos is simple service for receiving simplified information about GitHub Repositories.
 
-* Version
-
-0.0.1
+Different versions of this service are on branches. Existing versions:
+* With RxJava1 (Integration tests are not passing...)
 
 ### How do I get set up? ###
 
